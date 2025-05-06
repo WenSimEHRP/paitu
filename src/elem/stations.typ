@@ -18,28 +18,38 @@
 ) = {
   assert(stations.len() > 0, message: "There should be at least one station")
   let ret = (:)
-  let a = stations.pairs().sorted(key: it => it.at(1).position)
+  let a = stations.pairs().sorted(key: it => it.at(1).at("position", default: 0))
   let draw-height = 0
-  let prev-pos = a.at(0).at(1).position
+  let prev-pos = a.at(0).at(1).at("position", default: 0)
   let next-pos = 0
   for i in range(a.len()) {
     let name = a.at(i).at(0)
     let info = a.at(i).at(1)
+    let curr-pos = info.at("position", default: 0)
     let track_count = 0
-    if type(info.tracks) == array {
-      track_count = info.tracks.len() - 1
-    } else {
-      track_count = info.tracks - 1
+    if "tracks" in info {
+      if type(info.tracks) == array {
+        assert(info.tracks.len() > 0, message: "There should be at least one track")
+        track_count = info.tracks.len() - 1
+      } else {
+        assert(info.tracks > 0, message: "There should be at least one track")
+        track_count = info.tracks - 1
+      }
     }
-    let l = (info.position - prev-pos)
-    if track-space-scale-mode == "log" and l != 0 {
-      l = calc.log(l, base: 2)
-    }
-    if track-space-scale-mode == "sqrt" {
+    let l = (curr-pos - prev-pos)
+    if track-space-scale-mode == "uniform" {
+      l = calc.min(i, 1)
+    } else if track-space-scale-mode == "logarithmic" {
+      if l != 0 { l = calc.log(l, base: 2) }
+    } else if track-space-scale-mode == "sqrt" {
       l = calc.sqrt(l)
+    } else if track-space-scale-mode == "linear" {
+      // do nothing
+    } else {
+      panic("Unknown track-space-scale-mode: " + str(track-space-scale-mode))
     }
-    draw-height += l * track-space-scale + track-scale * track_count
-    prev-pos = info.position
+    draw-height += l * track-space-scale * info.at("scale", default: 1) + track-scale * track_count
+    prev-pos = curr-pos
     let neighbors = ()
     if i != 0 { neighbors.push(a.at(i - 1).at(0)) }
     if i != a.len() - 1 { neighbors.push(a.at(i + 1).at(0)) }
@@ -48,6 +58,7 @@
       (
         neighbors: neighbors,
         draw-height: draw-height,
+        tracks: track_count,
         ..info,
       ),
     )
@@ -82,7 +93,7 @@
   for stat in stations {
     let info = stat.at(1)
     let c = none
-    let t = if type(info.tracks) == array { info.tracks.len() } else { info.tracks }
+    let t = calc.max(1, if type(info.tracks) == array { info.tracks.len() } else { info.tracks })
     if track-scale == 0 {
       t = 1
     }
@@ -90,11 +101,17 @@
     let e = to-x(end - beg) * u * h
 
     let station_label = [#grid(
-        columns: (auto, 4em),
-        gutter: .5em,
-        align: right,
-        [#(info.at("name", default: stat.at(0)))], [#zero.num(info.position, digits: 2, math: false)],
+        [#(info.at("name", default: stat.at(0)))]
       )]
+
+    if "position" in info {
+      station_label = [#grid(
+          columns: (auto, 4em),
+          gutter: .5em,
+          align: right,
+          [#(info.at("name", default: stat.at(0)))], [#zero.num(info.position, digits: 2, math: false)],
+        )]
+    }
     let m = measure(station_label)
     let x-offset = if track-scale != 0 { 3em.to-absolute() } else { 3pt }
     c = place(

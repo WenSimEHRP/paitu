@@ -11,7 +11,7 @@
 ///     When set to `none`, extra tracks will not be drawn.
 /// - track-space-scale (int, float, auto): Scales the space between stations
 /// - track-space-scale-mode (str): Sets how to scale the space between stations.
-///     possible values are `"linear"` and `"log"`
+///     possible values are `"linear"` , `uniformed`, and `"logarithmic"`
 /// - track-stroke (stroke): How to draw the track lines
 /// - track-numbering (str): Track identifier numbering.
 ///     The numbering is ignored when the station sets their own names.
@@ -132,6 +132,15 @@
             curve.line((col.x.end, col.y.beg)),
             curve.line((col.x.beg, col.y.end)),
           ),
+        )
+        place(
+          dx: col.x.beg - 2pt,
+          dy: col.y.beg - 2pt,
+          circle(
+            stroke: none,
+            fill: blue,
+            radius: 2pt,
+          )
         )
       }
     }
