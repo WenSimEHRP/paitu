@@ -3,59 +3,143 @@
 
 /// Draws a train timetable diagram
 ///
-/// - stations (dictionary): Stations to draw
-/// - trains (dictionary): Trains to draw
-/// - routings (dictionary): Routings to draw
-/// - track-scale (int, float, auto, none): Scales track space for stations.
-///     When set to `auto`, the track space is set to be 1em.
-///     When set to `none`, extra tracks will not be drawn.
-/// - track-space-scale (int, float, auto): Scales the space between stations
-/// - track-space-scale-mode (str): Sets how to scale the space between stations.
-///     possible values are `"linear"` , `uniformed`, and `"logarithmic"`
-/// - track-stroke (stroke): How to draw the track lines
-/// - track-numbering (str): Track identifier numbering.
-///     The numbering is ignored when the station sets their own names.
-/// - stroke (stroke): How to draw the frame
-/// - beg (int): beginning time, in seconds.
-///     Everything within `beg` and `end` will be drawn
-/// - end (int): ending time, in seconds.
-///     Everything within `beg` and `end` will be drawn
-/// - background (none, color, gradient, tiling): How to draw the background
-/// - reversed (boolean): Whether to draw the diagram reversely
-/// - train-coloring (str, auto, none): Controls train coloring. When set to
-///     `auto`, each train without a special color scheme will randomly
-///     pick a color. When set to `"by-speed"`, trains will be colored by
-///     its relative speed. When set to `none`, no special rules will apply.
-/// - length-unit (string): Controls the unit of length displayed on the diagram.
-///     Possible values are "km", "mi", "m", and "time".
-/// - unit-length (length): The length of one unit
-/// - horizontal-scale (int, float): Horizontal scale value
-/// - debug (boolean): Super secret debug flick
+/// ```example
+/// #import "@local/paiagram:0.1.0": paiagram
+/// #paiagram(
+///   beg: 6 * 3600,
+///   end: 9 * 3600,
+///   track-scale: .5,
+///   track-space-scale: 3,
+///   stations: (
+///     "a": (position: 0, tracks: 1, name: "Station A"),
+///     "b": (position: 1, tracks: 2, name: "Station B"),
+///   ),
+///   trains: (
+///     "Arupha": (
+///       schedule: (
+///    (arrival_time: 6 * 3600, station: "a", track_index: 0),
+///    (arrival_time: 7 * 3600, station: "b", track_index: 0),
+///       )
+///     ),
+///     "Aleph": (
+///       schedule: (
+///    (arrival_time: 7 * 3600, station: "a", track_index: 0),
+///    (arrival_time: 8 * 3600, station: "b", track_index: 0),
+///       )
+///     ),
+///     "Shuke": (
+///       schedule: (
+///    (arrival_time: 7 * 3600, station: "b", track_index: 1),
+///    (arrival_time: 8 * 3600, station: "a", track_index: 0),
+///       )
+///     ),
+///     "Beita": (
+///       schedule: (
+///    (arrival_time: 7.5 * 3600, departure_time: 8 * 3600, station: "b", track_index: 1),
+///    (arrival_time: 9 * 3600, station: "a", track_index: 0),
+///       )
+///     )
+///   )
+/// )
+/// ```
+///
 /// -> content
 #let paiagram(
   // basic information
+  /// Stations to draw
+  /// -> dictionary
   stations: (:),
+  /// Trains to draw
+  /// -> dictionary
   trains: (:),
+  /// Routings to draw
+  /// -> dictionary
   routings: (:),
   // station tracks
+  /// Set the distance scale between tracks on the diagram.
+  /// Setting it to `auto` will automatically calculate the distance based on the
+  /// text size. Setting it to `none`  or `0` will remove the track space.
+  /// -> auto | int | float | none
   track-scale: auto,
+  /// Set the distance scale between stations on the diagram.
+  /// ```example
+  /// #import "@local/paiagram:0.1.0": paiagram
+  /// #paiagram(
+  ///   beg: 6 * 3600,
+  ///   end: 9 * 3600,
+  ///   stations: (
+  ///     "a": (position: 0),
+  ///     "b": (position: 1),
+  ///   )
+  /// )
+  /// ```
+  /// ```example
+  /// #import "@local/paiagram:0.1.0": paiagram
+  /// #paiagram(
+  ///   beg: 6 * 3600,
+  ///   end: 9 * 3600,
+  ///   track-space-scale: 4.2,
+  ///   stations: (
+  ///     "a": (position: 0),
+  ///     "b": (position: 1),
+  ///   )
+  /// )
+  /// ```
+  /// -> int | float
   track-space-scale: 1,
+  /// How to scale the track space.
+  /// Possible values are:
+  /// - `"linear"`: The track space is scaled linearly.
+  /// - `"uniform"`: Each track space are the same size.
+  /// - `"Logarithmic"`: The track space is scaled logarithmically.
+  /// - `"sqrt"`: The track space is scaled by the square root.
+  /// -> string
   track-space-scale-mode: "linear",
+  /// The track space stroke.
+  /// -> none | auto | length | color | gradient | stroke | tiling | dictionary
   track-stroke: stroke(thickness: 1pt, dash: "dashed", paint: gray, cap: "round"),
+  /// Numbering scheme for the tracks.
+  /// -> string
   track-numbering: "1",
-  // border
+  /// How to stroke the diagram border.
+  /// -> none | auto | length | color | gradient | stroke | tiling | dictionary
   stroke: 1pt + gray,
-  // range to draw
+  /// Beginning time of the diagram, in seconds.
+  /// -> int
   beg: 0,
+  /// End time of the diagram, in seconds.
+  /// -> int
   end: 24 * 3600,
-  // general
-  background: none,
+  /// How to fill the diagram.
+  /// -> none | color | gradient | tiling
+  fill: none,
+  /// Whether to draw the diagram reversed.
+  /// -> bool
   reversed: false,
+  /// Train coloring mode.
+  /// When set to `auto`, the train will be colored based on the train name.
+  /// When set to `none`, all trains will be colored grey.
+  /// When set to `"default"`, the trains will be colored based on its stroke settings.
+  /// -> none | auto | length | color | gradient | stroke | tiling | dictionary | array
   train-coloring: auto,
+  /// Length unit for the diagram.
+  /// Possible values are:
+  /// - `"km"`: kilometers
+  /// - `"mi"`: miles
+  ///  - `"time`: hours
+  /// -> string
   length-unit: "km",
+  /// unit length for the diagram.
+  /// -> length
   unit-length: 1cm,
+  /// Horizontal scale for the diagram.
+  /// -> int | float
   horizontal-scale: 2,
+  /// Whether to draw the diagram in debug mode.
+  /// -> bool
   debug: false,
+  /// Whether to show the train labels.
+  /// -> bool
   show-label: true,
 ) = context {
   let track-scale = track-scale

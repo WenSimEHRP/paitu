@@ -30,7 +30,7 @@
   let track_cond = track_scale != 0 and cs.at("track_index", default: 0) > 0
   let cty = cy - cs.at("track_index", default: 0) * track_scale
   let arr_time = calc.rem(cs.arrival_time, 24 * 3600)
-  let dep_time = calc.rem(cs.departure_time, 24 * 3600)
+  let dep_time = calc.rem(cs.at("departure_time", default: cs.arrival_time), 24 * 3600)
   let y = if track_cond { cty } else { cy }
   if arr_time < beg_time {
     if dep_time < beg_time {
@@ -126,7 +126,7 @@
         }
       )
   )
-  let dep_time = calc.rem(cs.departure_time, 24 * 3600)
+  let dep_time = calc.rem(cs.at("departure_time", default: cs.arrival_time), 24 * 3600)
   let nex_time = calc.rem(ns.arrival_time, 24 * 3600)
   let pdep_time = dep_time - 24 * 3600
   let nnex_time = nex_time + 24 * 3600
