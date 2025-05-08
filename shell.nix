@@ -4,5 +4,6 @@ mkShell {
     rustup
     coreutils
     typst
+    poop
   ];
 }
