@@ -5,7 +5,7 @@
   return int(h * 3600 + m * 60 + s)
 }
 
-#let debug = true
+#let debug = false
 
 #let read-qetrc(qetrc) = {
   let stations = (:)
@@ -32,7 +32,7 @@
       schedule.push((
         id: station_name,
         time: (arrival_time, departure_time),
-        track: 0,
+        track: 1,
       ))
     }
     trains.insert(
@@ -53,7 +53,7 @@
     stations.insert(
       name,
       (
-        tracks: 1,
+        tracks: calc.max(int(name.len() / 3), 1) + 1,
         label: measure([#name]).values().map(it => float(it / 1pt)),
         position: float(pos),
       ),
@@ -65,7 +65,7 @@
 
 #context {
   [
-    #let (qstations, qtrains, qroutings) = read-qetrc(json("../jingha.pyetgr"))
+    #let (qstations, qtrains, qroutings) = read-qetrc(json("../examples/sample.pyetgr"))
     #let unit_length = 1cm
     #let stuff-to-draw = cbor(
       example-plugin.return_cbor(
@@ -79,7 +79,7 @@
           label_angle: 0.0,
           unit_length: unit_length / 1pt,
           position_axis_scale: .6,
-          track_spacing_scale: .8em.to-absolute() / 1pt,
+          track_spacing_scale: 1em.to-absolute() / 1pt,
           time_axis_scale: 2.0,
           beg_time: 0,
           end_time: 24 * 3600,
@@ -102,18 +102,57 @@
         dy: stuff-to-draw.beg_y * -1pt,
       )[#{
           let grid_stuff = ()
-          for (id, stat) in stuff-to-draw.stations.pairs().sorted(key: it => it.at(1).draw_height) {
-            grid_stuff.push(stat.rel_height * 1pt)
+          let grid_lines = ()
+          for (i, (id, stat)) in stuff-to-draw.stations.pairs().sorted(key: it => it.at(1).draw_height).enumerate() {
+            if i != 0 { grid_stuff.push(stat.rel_height * 1pt) }
+            grid_stuff.push((stat.tracks - 1) * (1em.to-absolute() / 1pt) * 1pt)
+            for j in range(24 * 6) {
+              grid_lines.push(
+                grid.cell(
+                  x: j,
+                  y: i * 2,
+                  inset: 0pt,
+                  grid(
+                    columns: 1fr,
+                    rows: (1fr,) * (stat.tracks - 1),
+                    align: left + horizon,
+                    inset: 2pt,
+                    ..range(stat.tracks - 2).map(it => grid.hline(
+                      y: it + 1,
+                      stroke: (paint: gray, dash: "dotted", cap: "round"),
+                    )),
+                  ),
+                ),
+              )
+            }
           }
           place(
             box(
-              width: 100% + stuff-to-draw.beg_x * 1pt,
+              width: (86400 - 0) * 1cm * 2 / 3600,
               grid(
-              rows: grid_stuff,
-              columns: (1fr, .5cm) * 24,
-              stroke: 1pt,
-              align: center + horizon,
-            ),)
+                rows: grid_stuff,
+                columns: (1fr,) * 24 * 6,
+                align: center + horizon,
+                ..range(25).map(it => grid.vline(x: it * 6, stroke: gray)),
+                // ..range(24)
+                //   .map(i => range(5).map(j => grid.vline(
+                //     x: j + i * 6 + 1,
+                //     stroke: (paint: gray, dash: "dotted", cap: "round"),
+                //   )))
+                //   .flatten(),
+                ..range(grid_stuff.len() + 1).map(it => grid.hline(y: it, stroke: gray)),
+                ..range(24)
+                  .map(i => range(int(grid_stuff.len() / 2)).map(j => grid.cell(
+                    x: i * 6,
+                    y: 1 + j * 2,
+                    align: top + left,
+                    inset: 0pt,
+                    box(stroke: 1pt, rotate(40deg, reflow: true, text(size: 12em, fill: gray, font: "Noto Sans")[#i])),
+                  )))
+                  .flatten(),
+                ..grid_lines,
+              ),
+            ),
           )
 
           for (id, train) in stuff-to-draw.trains {

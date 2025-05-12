@@ -7,6 +7,7 @@ initiate_protocol!();
 
 // some constants
 const STATION_LABEL_PADDING: f64 = 3.0;
+const TRAIN_LABEL_PADDING: f64 = 5.0;
 
 #[inline(always)]
 fn tausworthe(s: u32, a: u8, b: u8, c: u32, d: u8) -> u32 {
@@ -19,6 +20,7 @@ fn tausworthe(s: u32, a: u8, b: u8, c: u32, d: u8) -> u32 {
 struct Label {
     coor: [f64; 2],
     index: usize,
+    mode: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -41,8 +43,8 @@ struct Diagram {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct Station {
-    lines: Vec<Line>,
     labels: Vec<Label>,
+    tracks: u64,
     draw_height: f64,
     rel_height: f64,
 }
@@ -147,12 +149,11 @@ fn parse_stations(data: &RawDiagram, dia: &mut Diagram) {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut draw_height = 0.0;
-    let mut rel_height = 0.0;
+    let mut track_height = 0.0;
     let mut prev_pos = stations_vec[0].1.position;
     let mut l;
     for (i, (id, st)) in stations_vec.into_iter().enumerate() {
         assert!(st.tracks > 0);
-        let mut lines: Vec<Line> = Vec::new();
         l = st.position - prev_pos;
         match data.station_scale_mode {
             ScaleMode::Logarithmic => {
@@ -181,8 +182,8 @@ fn parse_stations(data: &RawDiagram, dia: &mut Diagram) {
             }
         }
         l *= data.unit_length * data.position_axis_scale;
-        rel_height = l + (st.tracks - 1) as f64 * data.track_spacing_scale;
-        draw_height += rel_height;
+        track_height = (st.tracks - 1) as f64 * data.track_spacing_scale;
+        draw_height += l + track_height;
         prev_pos = st.position;
         dia.collisions.push(Collision {
             nodes: vec![
@@ -204,19 +205,13 @@ fn parse_stations(data: &RawDiagram, dia: &mut Diagram) {
                 ],
             ],
         });
-        for i in 0..st.tracks {
-            let height = draw_height - ((i as f64) * data.track_spacing_scale);
-            lines.push(Line {
-                nodes: vec![[dia.beg_x, height], [dia.end_x, height]],
-            });
-        }
         dia.stations.insert(
             id.clone(),
             Station {
-                lines: lines,
+                tracks: st.tracks,
                 labels: Vec::new(),
                 draw_height: draw_height,
-                rel_height: rel_height,
+                rel_height: l,
             },
         );
     }
@@ -233,8 +228,39 @@ fn solve_y_point(p1: [f64; 2], p2: [f64; 2], x: f64) -> [f64; 2] {
     [x, m * x + b]
 }
 
+#[inline(always)]
+fn rec(p0: [f64; 2], theta: f64, r: f64) -> [f64; 2] {
+    // 使用极坐标计算新的点
+    // p0 是原点，theta 是角度（弧度），r 是距离
+    let x = p0[0] + r * theta.cos();
+    let y = p0[1] + r * theta.sin();
+    [x, y]
+}
+
+enum CompareResult {
+    Equal,
+    Greater,
+    Less,
+}
+
+#[inline(always)]
+fn compare_floats(a: f64, b: f64) -> CompareResult {
+    // 计算差的绝对值
+    let diff = (a - b).abs();
+    if diff < 1e-10 {
+        CompareResult::Equal
+    } else if a > b {
+        CompareResult::Greater
+    } else {
+        CompareResult::Less
+    }
+}
+
 fn parse_trains(data: &RawDiagram, dia: &mut Diagram) {
     for (id, train) in data.trains.iter() {
+        let mut new_train = Train::default();
+        let r = train.label[0];
+        let angle = 30.0; // TODO
         let mut lines: Vec<Line> = Vec::new();
         let mut line = Line::default();
         for (i, stat) in train.schedule.iter().enumerate() {
@@ -257,27 +283,165 @@ fn parse_trains(data: &RawDiagram, dia: &mut Diagram) {
         lines.push(line);
         // filter out lines with less than 2 nodes
         lines.retain(|l| l.nodes.len() > 1);
-        dia.trains.insert(
-            id.clone(),
-            Train {
-                lines: lines,
-                labels: Vec::new(),
-                // generate a random number for the train
-                rand: {
-                    let mut seed = 0u32;
-                    for (i, c) in id.bytes().enumerate() {
-                        seed = seed.wrapping_add((c as u32) << (i % 4 * 8));
-                    }
-                    let s1 = tausworthe(seed, 13, 19, 4294967294, 12);
-                    let s2 = tausworthe(s1, 2, 25, 4294967288, 4);
-                    let s3 = tausworthe(s2, 3, 11, 4294967280, 17);
+        // check if we can fit labels
+        for l in lines.iter_mut() {
+            // flat labels are handled specially.
+            let beg_flat = l.nodes[0][0] - dia.beg_x < 1e-10;
+            let end_flat = l.nodes[l.nodes.len() - 1][0] - dia.end_x < 1e-10;
+            // determine up, compare the y values
+            let mut beg_behaviour: CompareResult;
+            let mut end_behaviour: CompareResult;
+            if l.nodes.len() > 2 {
+                // check for the y values
+                beg_behaviour = compare_floats(l.nodes[0][1], l.nodes[2][1]);
+                end_behaviour =
+                    compare_floats(l.nodes[l.nodes.len() - 3][1], l.nodes[l.nodes.len() - 1][1]);
+            } else {
+                beg_behaviour = compare_floats(l.nodes[0][1], l.nodes[1][1]);
+                end_behaviour =
+                    compare_floats(l.nodes[l.nodes.len() - 2][1], l.nodes[l.nodes.len() - 1][1]);
+            }
+            place_beg_label(
+                l,
+                &mut new_train,
+                train,
+                dia,
+                beg_behaviour,
+                end_flat,
+                angle,
+                r,
+            );
+            place_end_label(
+                l,
+                &mut new_train,
+                train,
+                dia,
+                end_behaviour,
+                end_flat,
+                angle,
+                r,
+            );
+        }
+        new_train.lines = lines;
+        new_train.rand = {
+            let mut seed = 0u32;
+            for (i, c) in id.bytes().enumerate() {
+                seed = seed.wrapping_add((c as u32) << (i % 4 * 8));
+            }
+            let s1 = tausworthe(seed, 13, 19, 4294967294, 12);
+            let s2 = tausworthe(s1, 2, 25, 4294967288, 4);
+            let s3 = tausworthe(s2, 3, 11, 4294967280, 17);
 
-                    // 组合多个 Tausworthe 输出以提高随机性
-                    s1 ^ s2 ^ s3
-                },
-            },
-        );
+            // 组合多个 Tausworthe 输出以提高随机性
+            s1 ^ s2 ^ s3
+        };
+        dia.trains.insert(id.clone(), new_train);
     }
+}
+
+fn place_beg_label(
+    l: &mut Line,
+    new_train: &mut Train,
+    train: &RawTrain,
+    dia: &mut Diagram,
+    beg_behaviour: CompareResult,
+    beg_flat: bool,
+    angle: f64, // in degrees
+    r: f64,
+) {
+    // if beg_flat -> allow moving right
+    let n1 = l.nodes[0];
+    let n0 = rec(
+        n1,
+        match beg_behaviour {
+            CompareResult::Equal => 0.0,
+            CompareResult::Greater => (180.0 - angle).to_radians(),
+            CompareResult::Less => (180.0 + angle).to_radians(),
+        },
+        r,
+    );
+    // calculate the bounding box
+    let t = angle.to_radians();
+    let h = train.label[1];
+    let mut collision = match beg_behaviour {
+        CompareResult::Equal => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0], n0[1] + h],
+                [n1[0], n1[1] + h],
+            ],
+        },
+        CompareResult::Greater => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0] - t.sin() * h, n0[1] - t.cos() * h],
+                [n1[0] - t.sin() * h, n1[1] - t.cos() * h],
+            ],
+        },
+        CompareResult::Less => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0] + t.sin() * h, n0[1] - t.cos() * h],
+                [n1[0] + t.sin() * h, n1[1] - t.cos() * h],
+            ],
+        },
+    };
+    dia.collisions.push(collision);
+}
+
+fn place_end_label(
+    l: &mut Line,
+    new_train: &mut Train,
+    train: &RawTrain,
+    dia: &mut Diagram,
+    end_behaviour: CompareResult,
+    end_flat: bool,
+    angle: f64, // in degrees
+    r: f64,
+) {
+    let n1 = l.nodes[l.nodes.len() - 1];
+    let n0 = rec(
+        n1,
+        match end_behaviour {
+            CompareResult::Equal => 0.0,
+            CompareResult::Greater => (-angle).to_radians(),
+            CompareResult::Less => (angle).to_radians(),
+        },
+        r,
+    );
+    // calculate the bounding box
+    let t = angle.to_radians();
+    let h = train.label[1];
+    let mut collision = match end_behaviour {
+        CompareResult::Equal => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0], n0[1] + h],
+                [n1[0], n1[1] + h],
+            ],
+        },
+        CompareResult::Greater => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0] - t.sin() * h, n0[1] - t.cos() * h],
+                [n1[0] - t.sin() * h, n1[1] - t.cos() * h],
+            ],
+        },
+        CompareResult::Less => Collision {
+            nodes: vec![
+                [n1[0], n1[1]],
+                [n0[0], n0[1]],
+                [n0[0] + t.sin() * h, n0[1] - t.cos() * h],
+                [n1[0] + t.sin() * h, n1[1] - t.cos() * h],
+            ],
+        },
+    };
+    dia.collisions.push(collision);
 }
 
 fn refresh_lines(lines: &mut Vec<Line>, line: &mut Line) {
