@@ -40,7 +40,7 @@
 
 /// Reads a qETRC/pyETRC diagram file and returns the stations, trains, and routings.
 ///
-/// - data (dictionary):
+/// - qetrc (dictionary):
 /// -> (lines, trains, routings)
 #let read-qetrc(qetrc) = {
   let stations = (:)
@@ -94,4 +94,46 @@
     )
   }
   (stations, trains, routings)
+}
+
+#let read-qetrc-2(qetrc) = {
+  let stations = (:)
+  let trains = (:)
+  for train in qetrc.at("trains") {
+    let name = train.at("checi").at(0)
+    let departure = train.at("sfz")
+    let terminal = train.at("zdz")
+    let schedule = ()
+    for station in train.at("timetable") {
+      let station_name = station.at("zhanming")
+      let time = (
+        to-timestamp(..station.at("ddsj").split(":").map(int)),
+        to-timestamp(..station.at("cfsj").split(":").map(int)),
+      )
+      schedule.push((
+        station: station_name,
+        time: time,
+        track: 0,
+      ))
+    }
+    trains.insert(
+      name,
+      (
+        schedule: schedule,
+      ),
+    )
+  }
+  for station in qetrc.at("line").at("stations") {
+    let name = station.at("zhanming")
+    let tracks = 1
+    let pos = station.at("licheng")
+    stations.insert(
+      name,
+      (
+        tracks: 1,
+        position: float(pos),
+      ),
+    )
+  }
+  (stations, trains)
 }
