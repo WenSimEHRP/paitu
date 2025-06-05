@@ -7,16 +7,13 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-minimal-protocol = "0.1.0"
 serde = { version = "1.0.219", features = ["derive"] }
+serde_with = { version = "3.12.0", features = ["macros"] }
 ciborium = "0.2.2"
-indexmap = { version = "2.9.0", features = ["serde"] }
-arrayvec = { version = "0.7.6", features = ["serde"] }
 serde-big-array = "0.5.1"
-petgraph = {version = "0.8.1", features = ["serde-1"]}
+petgraph = "0.8.1"
 typst-wasm-protocol = "0.0.2"
 anyhow = "1.0.98"
-bimap = "0.6.3"
 multimap = "0.10.1"
 
 [profile.release]

@@ -42,3 +42,15 @@ pub fn prng_range(seed: u32, min: u32, max: u32) -> u32 {
     let range = max - min;
     min + (simple_prng(seed) % range)
 }
+
+pub fn string_to_u32(s: &str) -> u32 {
+    let mut hash = 0x9E3779B9u32;
+    for (i, byte) in s.bytes().enumerate() {
+        let b = byte as u32;
+        hash ^= b.wrapping_add(i as u32).wrapping_mul(0x9E3779B9);
+        hash = hash.rotate_left(5);
+        hash ^= hash >> 16;
+        hash = hash.wrapping_mul(0x85EBCA6B);
+    }
+    hash
+}
