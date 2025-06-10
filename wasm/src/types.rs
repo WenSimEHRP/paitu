@@ -1,73 +1,15 @@
-use anyhow::{Context, Result};
+use derive_more::{Add, AddAssign, Sub};
 use serde::{Deserialize, Serialize};
+use std::ops;
 
-pub type StationID = u32;
+pub type StationID = String;
+pub type TrainID = String;
 pub type IntervalID = (StationID, StationID);
-pub type PolygonID = u32;
-pub type DutyID = u32;
-pub type TrainNumberID = u32;
-pub type Track = u16;
-/// interval length in meters, or seconds, depending on context
-pub type IntervalLength = u32;
-/// graph length in pts, the default unit of length in typst
-pub type GraphLength = f32;
-pub type Node = (GraphLength, GraphLength);
-/// color degree in 0-360, for use with oklch
-pub type ColorDegree = u16;
 
-pub trait IntervalLengthExt {
-    fn to_graph_length(self, scale: f32, mode: ScaleMode, unit_length: GraphLength) -> GraphLength;
-}
-
-impl IntervalLengthExt for IntervalLength {
-    fn to_graph_length(self, scale: f32, mode: ScaleMode, unit_length: GraphLength) -> GraphLength {
-        let length_km = self as f32 / 1000.0;
-        let scale_factor = unit_length * scale; // 预计算
-
-        let transformed = match mode {
-            ScaleMode::Linear => length_km, // 最常用的放前面
-            ScaleMode::Auto => length_km,
-            ScaleMode::Uniform => 1.0,
-            ScaleMode::Square => length_km * length_km,
-            ScaleMode::SquareRoot => length_km.sqrt(),
-            ScaleMode::Logarithmic => length_km.ln(),
-        };
-        transformed.max(1.0) * scale_factor
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Add, Sub, Deserialize)]
 pub struct Time(u32);
 
 impl Time {
-    pub fn from_hh_mm_ss_string(hh_mm_ss: String) -> Result<Self> {
-        let parts: Vec<&str> = hh_mm_ss.split(':').collect();
-        if parts.len() != 3 {
-            return Err(anyhow::anyhow!(
-                "Invalid time format: expected hh:mm:ss, got {}",
-                hh_mm_ss
-            ));
-        }
-        let h: u32 = parts[0].parse().with_context(|| {
-            format!(
-                "Failed to parse HOUR '{}' in time string '{}'",
-                parts[0], hh_mm_ss
-            )
-        })?;
-        let m: u32 = parts[1].parse().with_context(|| {
-            format!(
-                "Failed to parse MINUTE '{}' in time string '{}'",
-                parts[1], hh_mm_ss
-            )
-        })?;
-        let s: u32 = parts[2].parse().with_context(|| {
-            format!(
-                "Failed to parse SECOND '{}' in time string '{}'",
-                parts[2], hh_mm_ss
-            )
-        })?;
-        Ok(Time(h * 3600 + m * 60 + s))
-    }
     pub fn new(seconds: u32) -> Self {
         Time(seconds)
     }
@@ -87,16 +29,57 @@ impl Time {
         self.0 / 3600
     }
     pub fn hour(&self) -> u32 {
-        self.0 / 3600 % 24
+        (self.0 / 3600) % 24
+    }
+    pub fn to_graph_length(&self, unit_length: GraphLength, scale_mode: ScaleMode) -> GraphLength {
+        let hours = self.0 as f32 / 3600.0;
+        unit_length * hours
     }
 }
 
-#[derive(Copy, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Add, Sub, Deserialize)]
+pub struct IntervalLength(u32);
+
+impl IntervalLength {
+    pub fn kilometers(&self) -> f32 {
+        self.0 as f32 / 1000.0
+    }
+    pub fn to_graph_length(&self, unit_length: GraphLength, scale_mode: ScaleMode) -> GraphLength {
+        unit_length * self.kilometers()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Add, Sub, Deserialize, Serialize, AddAssign)]
+pub struct GraphLength(f32);
+
+impl From<f32> for GraphLength {
+    fn from(value: f32) -> Self {
+        GraphLength(value)
+    }
+}
+
+impl ops::Mul<GraphLength> for f32 {
+    type Output = GraphLength;
+
+    fn mul(self, rhs: GraphLength) -> Self::Output {
+        GraphLength(self * rhs.0)
+    }
+}
+
+impl ops::Mul<f32> for GraphLength {
+    type Output = GraphLength;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        GraphLength(self.0 * rhs)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum ScaleMode {
-    Auto,
     Linear,
     Logarithmic,
-    Square,
-    SquareRoot,
     Uniform,
 }
+
+#[derive(Debug, Serialize)]
+pub struct Node(pub GraphLength, pub GraphLength);
